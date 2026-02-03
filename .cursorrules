@@ -1,0 +1,337 @@
+{
+  "project": {
+    "name": "Lovable Subscription Foundation",
+    "description": "Pre-built subscription billing with Stripe and Supabase",
+    "version": "1.0.0"
+  },
+
+  "purpose": {
+    "primary": "Help developers integrate subscription billing into their app using this boilerplate.",
+    "who": "Developers who want to add subscription billing to their app using this boilerplate.",
+    "what": "Using the boilerplate as a dependency: SubscriptionProvider, SubscriptionGate, pricing.ts, create-checkout, create-portal, etc.",
+    "how": "Use the 'subscriptions' section (feature gating, plan gating, upgrade flow, adding features, customer portal) and 'saas_setup' (workflow_steps: link Supabase, migrate, SaaS questions, Stripe catalog, write to DB, deploy functions, secrets, Lovable env). The subscriptions block and saas_setup are for integration guidance, not for building this repo.",
+    "boilerplate_development": "Only when the user explicitly asks to develop or contribute to this boilerplate (e.g. implement a milestone in this repo), use MILESTONES.md. Otherwise default to integration guidance above."
+  },
+
+  "subscriptions": {
+    "provider": "lovable-subscription-foundation",
+    "enabled": true,
+    "config_file": "./src/config/pricing.ts",
+
+    "instructions": {
+     "overview": "When helping users add billing to their app: use this boilerplate as a dependency. SubscriptionProvider, SubscriptionGate, pricing.ts, create-checkout, and create-portal are pre-built. Guide users to use these (feature gating, plan gating, upgrade flow) and to run saas_setup workflow_steps for one-time setup. DO NOT write custom billing code.",
+
+      "feature_gating": {
+        "rule": "ALWAYS use <SubscriptionGate slug='feature-name'> component for feature-based access control. NEVER write custom if/else checks.",
+        "examples": [
+          {
+            "description": "Lock a component behind a feature",
+            "code": "<SubscriptionGate slug=\"advanced-analytics\">\n  <AdvancedAnalytics />\n</SubscriptionGate>"
+          },
+          {
+            "description": "Lock a button with custom fallback",
+            "code": "<SubscriptionGate slug=\"export-data\" fallback={<p>Upgrade to export data</p>}>\n  <ExportButton />\n</SubscriptionGate>"
+          },
+          {
+            "description": "Hide navigation item when locked",
+            "code": "<SubscriptionGate slug=\"team-collaboration\" hideWhenLocked>\n  <NavItem>Team</NavItem>\n</SubscriptionGate>"
+          }
+        ]
+      },
+
+      "plan_gating": {
+        "rule": "Use <PlanGate plan='plan-id'> for plan-level restrictions. Accepts single plan or array of plans.",
+        "examples": [
+          {
+            "description": "Lock entire page to Pro users",
+            "code": "<PlanGate plan=\"pro\">\n  <ProDashboard />\n</PlanGate>"
+          },
+          {
+            "description": "Allow Pro or Enterprise",
+            "code": "<PlanGate plan={['pro', 'enterprise']}>\n  <PremiumFeature />\n</PlanGate>"
+          }
+        ]
+      },
+
+      "upgrade_flow": {
+        "rule": "The UpgradePrompt component is automatically shown when access is denied. It handles the complete Stripe checkout flow.",
+        "manual_trigger": "To manually trigger upgrade, use the UpgradePrompt component or call the create-checkout Edge Function directly.",
+        "example": "const { subscription } = useSubscription()\nif (!subscription || subscription.plan_id === 'free') {\n  return <UpgradePrompt requiredPlan=\"pro\" />\n}"
+      },
+
+      "checking_access": {
+        "rule": "Use the useSubscription() hook to check access programmatically.",
+        "examples": [
+          {
+            "description": "Check if user can access a feature",
+            "code": "const { canAccess } = useSubscription()\nconst hasAdvancedAnalytics = canAccess('advanced-analytics')"
+          },
+          {
+            "description": "Check current plan",
+            "code": "const { subscription } = useSubscription()\nconst isPro = subscription?.plan_id === 'pro'"
+          },
+          {
+            "description": "Check subscription status",
+            "code": "const { subscription } = useSubscription()\nconst isActive = subscription?.status === 'active'"
+          }
+        ]
+      },
+
+      "adding_features": {
+        "steps": [
+          "1. Add feature to src/config/pricing.ts in the 'features' object",
+          "2. Add feature slug to the appropriate plan's 'features' array",
+          "3. Use <SubscriptionGate slug='new-feature-slug'> in your component",
+          "4. No backend changes needed - automatic!"
+        ],
+        "example": {
+          "step1": "In pricing.ts:\n'team-collaboration': {\n  name: 'Team Collaboration',\n  description: 'Invite team members',\n  plans: ['pro', 'enterprise']\n}",
+          "step2": "In pricing.ts plans:\npro: {\n  features: [..., 'team-collaboration']\n}",
+          "step3": "In component:\n<SubscriptionGate slug=\"team-collaboration\">\n  <TeamCollaboration />\n</SubscriptionGate>"
+        }
+      },
+
+      "customer_portal": {
+        "rule": "Use the create-portal Edge Function to let users manage their subscription.",
+        "example": "const supabase = createClient(...)\nconst { data } = await supabase.functions.invoke('create-portal', {\n  body: { return_url: window.location.href }\n})\nwindow.location.href = data.portal_url"
+      }
+    },
+
+    "available_features": [
+      "basic-analytics",
+      "advanced-analytics",
+      "api-access-1k",
+      "api-access-10k",
+      "api-access-unlimited",
+      "export-data",
+      "white-label",
+      "custom-branding",
+      "email-support",
+      "priority-support",
+      "dedicated-support",
+      "sla-guarantee"
+    ],
+
+    "available_plans": [
+      "free",
+      "pro",
+      "enterprise"
+    ],
+
+    "components": {
+      "SubscriptionProvider": {
+        "description": "Wraps your app and provides subscription state to all components",
+        "required": true,
+        "usage": "<SubscriptionProvider supabaseUrl={...} supabaseAnonKey={...}>\n  <App />\n</SubscriptionProvider>",
+        "props": {
+          "supabaseUrl": "Supabase project URL",
+          "supabaseAnonKey": "Supabase anon/public key",
+          "supabaseClient": "(Optional) Provide your own Supabase client"
+        }
+      },
+      "SubscriptionGate": {
+        "description": "Feature-based access control component",
+        "props": {
+          "slug": "Feature slug from pricing.ts (required)",
+          "fallback": "Custom component to show when locked (optional)",
+          "loadingFallback": "Custom loading component (optional)",
+          "hideWhenLocked": "Hide instead of showing upgrade prompt (optional)"
+        }
+      },
+      "PlanGate": {
+        "description": "Plan-based access control component",
+        "props": {
+          "plan": "Plan ID or array of plan IDs (required)",
+          "fallback": "Custom component to show when locked (optional)",
+          "loadingFallback": "Custom loading component (optional)",
+          "hideWhenLocked": "Hide instead of showing upgrade prompt (optional)"
+        }
+      },
+      "UpgradePrompt": {
+        "description": "Pre-built upgrade UI with Stripe checkout integration",
+        "props": {
+          "featureSlug": "Feature that triggered the prompt (optional)",
+          "requiredPlan": "Required plan (optional, overrides featureSlug)",
+          "successUrl": "Post-checkout success URL (optional)",
+          "cancelUrl": "Checkout cancel URL (optional)"
+        }
+      }
+    },
+
+    "hooks": {
+      "useSubscription": {
+        "description": "Access subscription state and helper functions",
+        "returns": {
+          "subscription": "Current subscription object",
+          "loading": "Loading state (boolean)",
+          "error": "Error object if fetch failed",
+          "refetch": "Function to manually refetch subscription",
+          "canAccess": "Function to check feature access: canAccess('feature-slug')",
+          "isPlanActive": "Function to check plan: isPlanActive('pro')",
+          "isFeatureActive": "Alias for canAccess"
+        },
+        "example": "const { subscription, canAccess, loading } = useSubscription()\nif (loading) return <Spinner />\nif (canAccess('advanced-analytics')) {\n  return <AdvancedAnalytics />\n}"
+      }
+    },
+
+    "edge_functions": {
+      "create-checkout": {
+        "description": "Creates Stripe Checkout session for subscription upgrade",
+        "endpoint": "/functions/v1/create-checkout",
+        "method": "POST",
+        "auth": "Required (Bearer token)",
+        "body": {
+          "price_id": "Stripe price ID (required)",
+          "success_url": "Post-checkout success URL (required)",
+          "cancel_url": "Checkout cancel URL (required)",
+          "trial_period_days": "Trial period in days (optional)"
+        },
+        "response": {
+          "session_id": "Stripe session ID",
+          "session_url": "Redirect user to this URL"
+        }
+      },
+      "create-portal": {
+        "description": "Creates Stripe Customer Portal session for subscription management",
+        "endpoint": "/functions/v1/create-portal",
+        "method": "POST",
+        "auth": "Required (Bearer token)",
+        "body": {
+          "return_url": "URL to return to after portal (required)"
+        },
+        "response": {
+          "portal_url": "Redirect user to this URL"
+        }
+      },
+      "stripe-webhook": {
+        "description": "Handles Stripe webhook events (do not call directly)",
+        "endpoint": "/functions/v1/stripe-webhook",
+        "method": "POST",
+        "auth": "Stripe signature verification",
+        "note": "This is called by Stripe, not your frontend"
+      }
+    },
+
+    "common_patterns": {
+      "create_pricing_page": {
+        "description": "Display all plans with upgrade buttons",
+        "code": "import { PRICING_CONFIG } from '@/config/pricing'\nimport { createClient } from '@supabase/supabase-js'\n\nexport function PricingPage() {\n  const supabase = createClient(...)\n  \n  async function handleUpgrade(planId) {\n    const plan = PRICING_CONFIG.plans[planId]\n    const { data } = await supabase.functions.invoke('create-checkout', {\n      body: {\n        price_id: plan.stripePriceId,\n        success_url: `${window.location.origin}/success`,\n        cancel_url: window.location.href\n      }\n    })\n    window.location.href = data.session_url\n  }\n\n  return (\n    <div>\n      {Object.values(PRICING_CONFIG.plans).map(plan => (\n        <PricingCard key={plan.id} plan={plan} onUpgrade={() => handleUpgrade(plan.id)} />\n      ))}\n    </div>\n  )\n}"
+      },
+      "settings_page_with_portal": {
+        "description": "Show subscription settings with customer portal link",
+        "code": "import { useSubscription } from '@/components/SubscriptionProvider'\nimport { createClient } from '@supabase/supabase-js'\n\nexport function SettingsPage() {\n  const { subscription } = useSubscription()\n  const supabase = createClient(...)\n  \n  async function openPortal() {\n    const { data } = await supabase.functions.invoke('create-portal', {\n      body: { return_url: window.location.href }\n    })\n    window.location.href = data.portal_url\n  }\n\n  return (\n    <div>\n      <h1>Subscription Settings</h1>\n      <p>Plan: {subscription?.plan_id}</p>\n      <p>Status: {subscription?.status}</p>\n      <button onClick={openPortal}>Manage Subscription</button>\n    </div>\n  )\n}"
+      },
+      "conditionally_render_feature": {
+        "description": "Show different content based on plan",
+        "code": "import { useSubscription } from '@/components/SubscriptionProvider'\n\nexport function Dashboard() {\n  const { subscription, canAccess } = useSubscription()\n  \n  return (\n    <div>\n      <h1>Dashboard</h1>\n      \n      {/* Everyone sees this */}\n      <BasicStats />\n      \n      {/* Only Pro+ sees this */}\n      {canAccess('advanced-analytics') && <AdvancedAnalytics />}\n      \n      {/* Only Enterprise sees this */}\n      {subscription?.plan_id === 'enterprise' && <WhiteLabelSettings />}\n    </div>\n  )\n}"
+      }
+    },
+
+    "dos_and_donts": {
+      "DO": [
+        "✅ Use SubscriptionGate for feature access control",
+        "✅ Add new features to pricing.ts config",
+        "✅ Use the pre-built UpgradePrompt component",
+        "✅ Call create-checkout for custom upgrade flows",
+        "✅ Use create-portal for subscription management",
+        "✅ Trust the webhook handler to keep subscription state in sync"
+      ],
+      "DONT": [
+        "❌ Write custom if/else checks for plan access",
+        "❌ Modify the Edge Functions (unless you know what you're doing)",
+        "❌ Call Stripe API directly from frontend",
+        "❌ Store Stripe secret keys in frontend code",
+        "❌ Manually update the subscriptions table (let webhooks handle it)",
+        "❌ Skip the SubscriptionProvider wrapper"
+      ]
+    },
+
+    "troubleshooting": {
+      "subscription_not_updating": {
+        "issue": "Subscription status not updating after payment",
+        "solutions": [
+          "Check Stripe webhook is configured correctly",
+          "Verify STRIPE_WEBHOOK_SECRET is set in Supabase",
+          "Check Supabase logs for webhook errors: supabase functions logs stripe-webhook",
+          "Ensure RLS policies allow service_role to write"
+        ]
+      },
+      "features_not_unlocking": {
+        "issue": "Features not unlocking after upgrade",
+        "solutions": [
+          "Check pricing.ts config includes feature in plan's features array",
+          "Verify feature slug matches exactly (case-sensitive)",
+          "Check subscription status is 'active' or 'trialing'",
+          "Force refetch: const { refetch } = useSubscription(); refetch()"
+        ]
+      },
+      "checkout_fails": {
+        "issue": "Stripe Checkout fails to open",
+        "solutions": [
+          "Verify Stripe price IDs in pricing.ts match Stripe dashboard",
+          "Check STRIPE_SECRET_KEY is set in Supabase secrets",
+          "Ensure user is authenticated (JWT present)",
+          "Check browser console for errors"
+        ]
+      }
+    }
+  },
+
+  "mcp": {
+    "description": "Model Context Protocol integration for Lovable AI",
+    "servers": {
+      "supabase": {
+        "enabled": true,
+        "description": "Supabase integration for database and auth operations"
+      },
+      "stripe": {
+        "enabled": true,
+        "description": "Stripe integration (read-only, for viewing dashboard)"
+      }
+    }
+  },
+  "saas_setup": {
+    "description": "Step-by-step workflow to help users integrate billing into their app: link Supabase, migrate, SaaS questions, Stripe catalog, write to DB, deploy Edge Functions, set secrets, Lovable env. Use MCP tools. Only ask for credentials or confirmations when the workflow requires it",
+    "trigger": "When the user says they want to set up SaaS billing, configure subscription billing, or run the SaaS setup flow, run this workflow. Do not skip steps.",
+    "workflow_steps": [
+      "Step 1 – Supabase link: Call MCP run_supabase_cli with command 'status'. If not linked, ask user to run 'supabase link --project-ref <ref>' and confirm before continuing.",
+      "Step 2 – Migrate: Call MCP run_supabase_cli with command 'db push'. Report success or failure.",
+      "Step 3 – SaaS questions: Call MCP saas_setup_questions. Present the returned questions to the user. Collect answers (products, prices per product, entitlements, product_entitlements with limits). V1: no metered billing.",
+      "Step 4 – Stripe key: Ask user: 'Paste your Stripe secret key (sk_test_...) so I can create Products and Prices. It will only be used for this setup.' Do not store or echo the key.",
+      "Step 5 – Create in Stripe: Call MCP create_stripe_catalog with the collected config and the Stripe secret key. Report created product/price IDs.",
+      "Step 6 – Supabase credentials: Ask user for Supabase project URL and service_role key so MCP can write the catalog to the database.",
+      "Step 7 – Write catalog to Supabase: Call MCP write_supabase_catalog with config (including Stripe IDs from step 5), Supabase URL, and service_role key.",
+      "Step 8 – Deploy Edge Functions: Call MCP run_supabase_cli with command 'functions deploy stripe-webhook create-checkout create-portal ensure-stripe-customer'. When using the phased plan (Milestone 1+), ensure the app calls ensure-stripe-customer after signup so every user gets a Stripe Customer.",
+      "Step 9 – Supabase secrets: Ask user for STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and SUPABASE_SERVICE_ROLE_KEY (or confirm reuse). Call MCP run_supabase_cli with 'secrets set' for each.",
+      "Step 10 – Lovable env: Call MCP get_lovable_env_template. Output the returned key-value list and tell user to set these in Lovable project settings (manual paste; no API)."
+    ],
+    "rules": [
+      "Only ask for user input when the workflow explicitly requires it (credentials, link confirmation).",
+      "Do not run destructive commands without confirmation.",
+      "Do not log or repeat Stripe secret key or service_role key in responses.",
+      "Credentials are used only for this setup; user should set STRIPE_SECRET_KEY in Supabase secrets after setup."
+    ]
+  },
+  "deployment": {
+    "frontend": {
+     "platform": "Lovable (built-in deploy), Vercel, Netlify, or other static/hosted frontend",
+      "env_vars": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+      ]
+    },
+    "backend": {
+      "platform": "Supabase (Edge Functions + Database)",
+      "secrets": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ],
+      "commands": {
+        "deploy_functions": "supabase functions deploy stripe-webhook && supabase functions deploy create-checkout && supabase functions deploy create-portal && supabase functions deploy ensure-stripe-customer",
+        "run_migrations": "supabase db push"
+      }
+    }
+  }
+}

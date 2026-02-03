@@ -1,0 +1,78 @@
+{
+  "name": "lovable-subscription-foundation",
+  "version": "1.0.0",
+  "description": "Pre-built subscription billing boilerplate with Stripe and Supabase for Lovable users",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "dev": "supabase start && echo 'Supabase running at http://localhost:54323'",
+    "build": "tsc",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "supabase:migrate": "supabase db push",
+    "supabase:deploy": "npm run supabase:deploy:functions",
+    "supabase:deploy:functions": "supabase functions deploy stripe-webhook && supabase functions deploy create-checkout && supabase functions deploy create-portal",
+    "stripe:listen": "stripe listen --forward-to http://localhost:54321/functions/v1/stripe-webhook",
+    "license:generate": "node scripts/generate-license.js",
+    "license:batch": "node scripts/generate-license.js --batch",
+    "license:test": "node scripts/test-license.js",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "keywords": [
+    "subscription",
+    "billing",
+    "stripe",
+    "supabase",
+    "react",
+    "lovable",
+    "boilerplate",
+    "saas"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/lovable-subscription-foundation"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "crypto-js": "^4.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.1",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitest/coverage-v8": "^1.0.4",
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "prettier": "^3.1.1",
+    "supabase": "^1.142.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.0.4"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src",
+    "supabase",
+    ".cursorrules",
+    "README.md",
+    "LICENSE"
+  ]
+}

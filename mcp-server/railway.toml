@@ -1,0 +1,10 @@
+# BillingPlane MCP server – Railway deployment
+# Deploy from mcp-server/ directory or set root to mcp-server in Railway dashboard.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm run build && npm run start:http"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
