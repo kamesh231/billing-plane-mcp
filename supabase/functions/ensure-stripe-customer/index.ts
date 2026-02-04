@@ -1,6 +1,7 @@
 // Lovable Subscription Foundation
-// Edge Function: create-portal
-// Purpose: Create Stripe Customer Portal session for subscription management
+// Edge Function: ensure-stripe-customer
+// Purpose: Create Stripe Customer for new/free users so they can open Customer Portal without Checkout first.
+// Called from app after login/signup (e.g. SubscriptionProvider). Idempotent: no-op if stripe_customer_id already set.
 
 import Stripe from 'https://esm.sh/stripe@14.3.0'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
@@ -16,13 +17,11 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Get user from JWT
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
@@ -46,53 +45,57 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Parse request body
-    const body = await req.json()
-    const { return_url } = body
-
-    if (!return_url) {
-      return new Response(JSON.stringify({ error: 'Missing required field: return_url' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    // Get Stripe customer ID (billing schema; use service_role for consistent access)
+    // Billing table access via service_role (billing schema)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
-    const { data: subscription, error: fetchError } = await supabaseAdmin
-      .schema('billing')
+    const billing = supabaseAdmin.schema('billing')
+
+    const { data: subscription, error: fetchError } = await billing
       .from('subscriptions')
       .select('stripe_customer_id')
       .eq('user_id', user.id)
       .single()
 
-    if (fetchError || !subscription?.stripe_customer_id) {
-      return new Response(JSON.stringify({
-        error: 'No subscription found. Please subscribe first.'
-      }), {
+    if (fetchError || !subscription) {
+      return new Response(JSON.stringify({ error: 'No subscription row found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    // Create Customer Portal session
-    const session = await stripe.billingPortal.sessions.create({
-      customer: subscription.stripe_customer_id,
-      return_url,
+    if (subscription.stripe_customer_id) {
+      return new Response(JSON.stringify({ ok: true, already_has_customer: true }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    const customer = await stripe.customers.create({
+      email: user.email ?? undefined,
+      metadata: { user_id: user.id },
     })
 
-    return new Response(JSON.stringify({
-      portal_url: session.url
-    }), {
+    const { error: updateError } = await billing
+      .from('subscriptions')
+      .update({ stripe_customer_id: customer.id })
+      .eq('user_id', user.id)
+
+    if (updateError) {
+      console.error('Failed to update subscription with stripe_customer_id:', updateError)
+      return new Response(JSON.stringify({ error: 'Failed to save customer id' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    return new Response(JSON.stringify({ ok: true, customer_id: customer.id }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
-
   } catch (error) {
-    console.error('Create portal error:', error)
+    console.error('ensure-stripe-customer error:', error)
     return new Response(JSON.stringify({
       error: error instanceof Error ? error.message : 'Internal server error'
     }), {

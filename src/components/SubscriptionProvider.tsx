@@ -76,8 +76,16 @@ export function SubscriptionProvider({
         return
       }
 
-      // Fetch subscription
+      // Ensure Stripe Customer exists for free users (so Upgrade CTA can open Portal without Checkout first)
+      try {
+        await supabase.functions.invoke('ensure-stripe-customer')
+      } catch (_) {
+        // Non-blocking: fetch subscription anyway
+      }
+
+      // Fetch subscription (billing schema)
       const { data, error: fetchError } = await supabase
+        .schema('billing')
         .from('subscriptions')
         .select('*')
         .eq('user_id', user.id)
@@ -112,12 +120,12 @@ export function SubscriptionProvider({
   useEffect(() => {
     fetchSubscription()
 
-    // Subscribe to real-time changes
+    // Subscribe to real-time changes (billing schema)
     const channel = supabase
       .channel('subscription-changes')
       .on('postgres_changes', {
         event: 'UPDATE',
-        schema: 'public',
+        schema: 'billing',
         table: 'subscriptions'
       }, (payload) => {
         console.log('Subscription updated:', payload)

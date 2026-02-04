@@ -40,7 +40,7 @@ export interface ProductEntitlementInput {
 export interface WriteSupabaseCatalogInput {
   supabase_url: string
   supabase_service_role_key: string
-  /** Schema for billing tables. Use "billing" after Milestone 1 (PHASED_BILLING_PLAN.md); default "public". */
+  /** Schema for billing tables. Default "billing" (Milestone 1). Use "public" only for legacy. */
   schema?: string
   products: ProductInput[]
   prices: PriceInput[]
@@ -55,7 +55,7 @@ export async function writeSupabaseCatalog(args: WriteSupabaseCatalogInput): Pro
   const {
     supabase_url,
     supabase_service_role_key,
-    schema = 'public',
+    schema = 'billing',
     products,
     prices,
     entitlements,

@@ -132,15 +132,18 @@ Before you begin, make sure you have:
    ```
 
    This creates:
-   - `subscriptions` table
-   - RLS policies
-   - Triggers for auto-creating subscriptions
+   - **Billing schema** (`billing`): all billing tables live under `billing` (e.g. `billing.subscriptions`, `billing.products`, `billing.prices`, `billing.entitlements`, `billing.product_entitlements`, `billing.subscription_items`).
+   - RLS policies on `billing.*` (users read own subscription; service_role full; catalog read for authenticated).
+   - Trigger on `auth.users`: every new user gets one row in `billing.subscriptions` (plan_id=free, status=active). The app calls the `ensure-stripe-customer` Edge Function after login so free users get a Stripe Customer and can open Customer Portal for upgrade without going through Checkout first.
+
+   **Expose billing schema (if required):** In Supabase Dashboard → Project Settings → API → "Exposed schemas", ensure `billing` is included so the REST/JS client can access `billing.*` tables. (Some projects expose all schemas by default.)
 
 3. **Deploy Edge Functions**
    ```bash
    supabase functions deploy stripe-webhook
    supabase functions deploy create-checkout
    supabase functions deploy create-portal
+   supabase functions deploy ensure-stripe-customer
    ```
 
 4. **Set Supabase secrets** ⚠️ Important!

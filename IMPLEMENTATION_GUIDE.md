@@ -6,7 +6,9 @@
 
 ## 🎯 Overview
 
-This project uses a **milestone-based implementation approach** designed for Cursor AI. Each milestone has:
+This project uses a **milestone-based implementation approach** designed for Cursor AI.
+
+**Billing schema (Milestone 1 / PHASED_BILLING_PLAN):** All billing tables live in the `billing` schema (`billing.subscriptions`, `billing.products`, `billing.prices`, etc.). New users get a free subscription row in `billing.subscriptions` via a trigger on `auth.users`, and the app calls the `ensure-stripe-customer` Edge Function so every user has a Stripe Customer (free users can open Customer Portal for upgrade without Checkout). Each milestone has:
 
 ✅ **Clear outcome** - What gets built
 ✅ **Testable verification** - How to verify it works

@@ -11,11 +11,12 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   httpClient: Stripe.createFetchHttpClient(),
 })
 
-// Initialize Supabase with service_role key (bypasses RLS)
+// Initialize Supabase with service_role key (bypasses RLS); billing tables in billing schema
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
+const billing = supabase.schema('billing')
 
 // Price ID to Plan ID mapping
 // TODO: Load this from pricing config
@@ -135,8 +136,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const priceId = subscription.items.data[0].price.id
   const planId = PRICE_TO_PLAN_MAP[priceId] || 'free'
 
-  // Update subscription in database
-  const { error } = await supabase
+  // Update subscription in database (billing schema)
+  const { error } = await billing
     .from('subscriptions')
     .update({
       stripe_customer_id: customerId,
@@ -171,8 +172,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string
 
-  // Find user by Stripe customer ID
-  const { data, error: fetchError } = await supabase
+  // Find user by Stripe customer ID (billing schema)
+  const { data, error: fetchError } = await billing
     .from('subscriptions')
     .select('user_id')
     .eq('stripe_customer_id', customerId)
@@ -187,8 +188,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const priceId = subscription.items.data[0].price.id
   const planId = PRICE_TO_PLAN_MAP[priceId] || 'free'
 
-  // Update subscription
-  const { error } = await supabase
+  // Update subscription (billing schema)
+  const { error } = await billing
     .from('subscriptions')
     .update({
       plan_id: planId,
@@ -214,7 +215,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string
 
-  const { error } = await supabase
+  const { error } = await billing
     .from('subscriptions')
     .update({
       status: 'canceled',
@@ -235,8 +236,8 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string
 
-  // If subscription was past_due, move back to active
-  const { error } = await supabase
+  // If subscription was past_due, move back to active (billing schema)
+  const { error } = await billing
     .from('subscriptions')
     .update({ status: 'active' })
     .eq('stripe_customer_id', customerId)
@@ -254,7 +255,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string
 
-  const { error } = await supabase
+  const { error } = await billing
     .from('subscriptions')
     .update({ status: 'past_due' })
     .eq('stripe_customer_id', customerId)

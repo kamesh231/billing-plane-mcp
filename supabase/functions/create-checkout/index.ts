@@ -64,8 +64,15 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Billing table access via service_role (billing schema)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+    const billing = supabaseAdmin.schema('billing')
+
     // Check if user already has a Stripe customer ID
-    const { data: subscription } = await supabase
+    const { data: subscription } = await billing
       .from('subscriptions')
       .select('stripe_customer_id')
       .eq('user_id', user.id)
@@ -83,8 +90,8 @@ Deno.serve(async (req) => {
       })
       customerId = customer.id
 
-      // Update subscription with customer ID
-      await supabase
+      // Update subscription with customer ID (billing schema)
+      await billing
         .from('subscriptions')
         .update({ stripe_customer_id: customerId })
         .eq('user_id', user.id)

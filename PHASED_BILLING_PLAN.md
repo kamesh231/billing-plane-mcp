@@ -93,9 +93,9 @@ This plan adds: **billing schema** (all billing tables under `billing`), **new-u
 
 **Success criteria**
 
-- [ ] All billing tables exist only under schema `billing`; no billing tables in `public`.
-- [ ] New user gets one row in `billing.subscriptions` (free) and a Stripe Customer; stripe_customer_id stored.
-- [ ] App and Edge Functions use `billing` schema for all billing table access.
+- [x] All billing tables exist only under schema `billing`; no billing tables in `public`. (Run migration 006 to drop public billing tables if not yet applied.)
+- [x] New user gets one row in `billing.subscriptions` (free) and a Stripe Customer; stripe_customer_id stored.
+- [x] App and Edge Functions use `billing` schema for all billing table access.
 
 ---
 
