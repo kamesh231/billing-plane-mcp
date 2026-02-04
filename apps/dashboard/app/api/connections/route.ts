@@ -4,7 +4,8 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { ensureDashboardUser } from '@/lib/user'
 import { generateToken, hashToken } from '@/lib/auth'
 
-const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://mcp.billingplane.com'
+// Default: Railway MCP URL with /sse for Lovable. Override with NEXT_PUBLIC_MCP_SERVER_URL when customer domain is ready.
+const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://billing-plane-mcp-mcp-server.up.railway.app/sse'
 
 export async function GET() {
   try {

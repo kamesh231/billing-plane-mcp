@@ -20,7 +20,7 @@ This plan adds: **billing schema** (all billing tables under `billing`), **new-u
 
 | **1. Billing schema + new user + Stripe Customer** | Not started | 0% |
 
-| **2. Catalog in Stripe + Checkout** | Partially done | ~60% |
+| **2. Catalog in Stripe + Checkout** | Done | 100% |
 
 | **3. Webhook sync + access until period end** | Partially done | ~55% |
 
@@ -101,14 +101,27 @@ This plan adds: **billing schema** (all billing tables under `billing`), **new-u
 
 ## Milestone 2: Catalog in Stripe + Checkout (Phases 3 + 4 + 5)
 
-**Status:** Partially done (~60%).
+**Status:** Done.
 
-**Tangible outcome:** Unchanged: sync catalog to Stripe (Products, Prices, Option C Features); create-checkout uses Supabase for trial when applicable; all catalog and subscription reads/writes use `billing` schema.
+**Tangible outcome:** Sync catalog to Stripe (Products, Prices, Option C column); create-checkout uses Supabase for trial when applicable; webhook resolves plan from billing catalog and writes subscription_items; all catalog and subscription reads/writes use `billing` schema.
 
 **Scope**
 
 - All Supabase reads/writes in create-checkout, stripe-webhook, create-portal, and catalog tools use `billing` schema (from Milestone 1).
-- Rest of Phase 3, 4, 5 as in original plan (sync to Stripe, trial from DB if desired, Option C Features).
+- Rest of Phase 3, 4, 5: trial from DB, price→plan from DB, Option C column, subscription_items sync.
+
+**Implemented**
+
+- **Migration 006:** `billing.entitlements.stripe_feature_id` (Option C) added.
+- **create-checkout:** Looks up `billing.prices` by `stripe_price_id`; uses `trial_days` from DB when request does not pass `trial_period_days` (request body overrides).
+- **stripe-webhook:** Plan resolved from `billing.prices` + `billing.products` (plan_id = lower(product.name)); no hardcoded price→plan map. Writes `billing.subscription_items` on checkout.session.completed, customer.subscription.created, and customer.subscription.updated.
+- **Catalog sync to Stripe:** Use MCP `create_stripe_catalog`; then `write_supabase_catalog` with schema `billing` to populate products/prices/entitlements/product_entitlements.
+
+**Verification**
+
+1. Run migration 006: `supabase db push` — then `SELECT column_name FROM information_schema.columns WHERE table_schema = 'billing' AND table_name = 'entitlements' AND column_name = 'stripe_feature_id';` returns 1 row.
+2. Checkout with a price that has `trial_days` in `billing.prices` and no `trial_period_days` in request — Stripe session should have trial.
+3. After checkout or subscription update, `billing.subscription_items` has rows for the subscription; plan on `billing.subscriptions` matches product name (lowercased) from catalog.
 
 ---
 

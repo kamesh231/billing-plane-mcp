@@ -18,13 +18,54 @@ const supabase = createClient(
 )
 const billing = supabase.schema('billing')
 
-// Price ID to Plan ID mapping
-// TODO: Load this from pricing config
-const PRICE_TO_PLAN_MAP: Record<string, string> = {
-  'price_pro_monthly': 'pro',
-  'price_pro_yearly': 'pro',
-  'price_enterprise_monthly': 'enterprise',
-  'price_enterprise_yearly': 'enterprise',
+/** Resolve Stripe price ID to plan_id from billing.prices + billing.products (Milestone 2). */
+async function resolvePlanIdFromPrice(stripePriceId: string): Promise<string> {
+  const { data, error } = await billing
+    .from('prices')
+    .select('products(name)')
+    .eq('stripe_price_id', stripePriceId)
+    .single()
+  if (error || !data) return 'free'
+  const products = data as { products: { name: string } | null }
+  const name = products?.products?.name
+  if (!name) return 'free'
+  return name.toLowerCase()
+}
+
+/** Sync Stripe subscription items to billing.subscription_items (Milestone 2). */
+async function syncSubscriptionItems(
+  stripeSubscriptionId: string,
+  userId: string,
+  items: Stripe.SubscriptionItem[]
+): Promise<void> {
+  const { data: subRow } = await billing
+    .from('subscriptions')
+    .select('id')
+    .eq('user_id', userId)
+    .single()
+  if (!subRow?.id) return
+
+  for (const item of items) {
+    const stripePriceId = item.price.id
+    const { data: priceRow } = await billing
+      .from('prices')
+      .select('id')
+      .eq('stripe_price_id', stripePriceId)
+      .single()
+    if (!priceRow?.id) continue
+
+    await billing
+      .from('subscription_items')
+      .upsert(
+        {
+          subscription_id: subRow.id,
+          price_id: priceRow.id,
+          stripe_subscription_item_id: item.id,
+          quantity: item.quantity ?? 1,
+        },
+        { onConflict: ['subscription_id', 'stripe_subscription_item_id'] }
+      )
+  }
 }
 
 // In-memory idempotency store (for MVP)
@@ -132,9 +173,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Fetch subscription details from Stripe
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
 
-  // Determine plan from price
+  // Determine plan from price (Milestone 2: from billing.prices + products)
   const priceId = subscription.items.data[0].price.id
-  const planId = PRICE_TO_PLAN_MAP[priceId] || 'free'
+  const planId = await resolvePlanIdFromPrice(priceId)
 
   // Update subscription in database (billing schema)
   const { error } = await billing
@@ -158,14 +199,43 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     throw error
   }
 
+  // Sync subscription items to billing.subscription_items (Milestone 2)
+  await syncSubscriptionItems(subscriptionId, userId, subscription.items.data)
+
   console.log(`Checkout completed for user ${userId}, plan: ${planId}`)
 }
 
 // Handler: customer.subscription.created
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
-  // Usually handled by checkout.session.completed
-  // This is a fallback for direct subscription creation
-  console.log(`Subscription created: ${subscription.id}`)
+  // Fallback when subscription created outside checkout (e.g. Portal); sync plan + items (Milestone 2)
+  const customerId = subscription.customer as string
+  const { data: subRow } = await billing
+    .from('subscriptions')
+    .select('user_id')
+    .eq('stripe_customer_id', customerId)
+    .single()
+  if (!subRow?.user_id) {
+    console.log(`Subscription created: ${subscription.id}, no local subscription for customer`)
+    return
+  }
+  const priceId = subscription.items.data[0]?.price.id
+  const planId = priceId ? await resolvePlanIdFromPrice(priceId) : 'free'
+  await billing
+    .from('subscriptions')
+    .update({
+      stripe_subscription_id: subscription.id,
+      plan_id: planId,
+      status: subscription.status,
+      trial_end: subscription.trial_end
+        ? new Date(subscription.trial_end * 1000).toISOString()
+        : null,
+      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      cancel_at_period_end: subscription.cancel_at_period_end,
+    })
+    .eq('user_id', subRow.user_id)
+  await syncSubscriptionItems(subscription.id, subRow.user_id, subscription.items.data)
+  console.log(`Subscription created for user ${subRow.user_id}, plan: ${planId}`)
 }
 
 // Handler: customer.subscription.updated
@@ -184,9 +254,9 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     return
   }
 
-  // Determine plan from price
-  const priceId = subscription.items.data[0].price.id
-  const planId = PRICE_TO_PLAN_MAP[priceId] || 'free'
+  // Determine plan from price (Milestone 2: from billing.prices + products)
+  const priceId = subscription.items.data[0]?.price.id
+  const planId = priceId ? await resolvePlanIdFromPrice(priceId) : 'free'
 
   // Update subscription (billing schema)
   const { error } = await billing
@@ -207,6 +277,9 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     console.error('Database update error:', error)
     throw error
   }
+
+  // Sync subscription items (Milestone 2)
+  await syncSubscriptionItems(subscription.id, data.user_id, subscription.items.data)
 
   console.log(`Subscription updated for user ${data.user_id}, status: ${subscription.status}`)
 }

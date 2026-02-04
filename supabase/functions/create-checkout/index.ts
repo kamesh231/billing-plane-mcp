@@ -97,6 +97,19 @@ Deno.serve(async (req) => {
         .eq('user_id', user.id)
     }
 
+    // Trial from DB when not passed in request (Milestone 2)
+    let trialDays = trial_period_days
+    if (trialDays == null || trialDays < 0) {
+      const { data: priceRow } = await billing
+        .from('prices')
+        .select('trial_days')
+        .eq('stripe_price_id', price_id)
+        .single()
+      if (priceRow?.trial_days != null && priceRow.trial_days > 0) {
+        trialDays = priceRow.trial_days
+      }
+    }
+
     // Create Checkout session
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
@@ -114,10 +127,10 @@ Deno.serve(async (req) => {
       },
     }
 
-    // Add trial period if specified
-    if (trial_period_days && trial_period_days > 0) {
+    // Add trial period if specified (request body overrides DB)
+    if (trialDays != null && trialDays > 0) {
       sessionParams.subscription_data = {
-        trial_period_days,
+        trial_period_days: trialDays,
         metadata: {
           user_id: user.id
         }
