@@ -28,7 +28,7 @@ export type ToolResult = {
 
 export async function executeTool(name: string, args: unknown): Promise<ToolResult> {
   const a = (args || {}) as Record<string, unknown>
-  let result: ToolResult
+  let result: { content: Array<{ type: string; text: string }>; isError?: boolean }
   switch (name) {
     case 'configure_plans':
       result = await configurePlans(a as { project_path: string })
@@ -45,7 +45,7 @@ export async function executeTool(name: string, args: unknown): Promise<ToolResu
       })
       break
     case 'generate_pricing_config':
-      result = await generatePricingConfig(a as { project_path: string; config: Record<string, unknown> })
+      result = await generatePricingConfig(a as Parameters<typeof generatePricingConfig>[0])
       break
     case 'saas_setup_questions':
       result = await saasSetupQuestions(a as { project_path?: string })
