@@ -102,6 +102,18 @@ Repeat the pattern for each milestone:
 
 ---
 
+## 💳 Proration (Milestone 4)
+
+**Stripe handles proration automatically.** No app logic is required.
+
+- **Upgrades (e.g. Free → Pro):** Stripe charges a prorated amount for the remainder of the current period. The webhook updates `billing.subscriptions` (plan_id, current_period_end, etc.) and `billing.subscription_items`; the app grants access immediately.
+- **Downgrades (e.g. Pro → Free):** When the user switches plan or cancels, Stripe can schedule the change at period end (`cancel_at_period_end`) or apply immediately. The app grants **access until `current_period_end`** (see below) so the user keeps paid features until the period they paid for ends.
+- **Catalog:** Plan and price resolution use `billing.prices` and `billing.products`; trial comes from `billing.prices.trial_days` when not overridden in the request.
+
+**Access until period end (Milestone 3):** `SubscriptionProvider` treats a subscription as having access when status is `active` or `trialing`, or when `current_period_end` is in the future (e.g. canceled with `cancel_at_period_end`). So users keep access until the paid period ends.
+
+---
+
 ## 🎨 Monetization Strategy
 
 ### Free Tier (MIT License)

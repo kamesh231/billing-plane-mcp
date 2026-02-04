@@ -138,31 +138,33 @@ export function SubscriptionProvider({
     }
   }, [])
 
+  /** Has paid access: active/trialing, or canceled/past_due but still within current_period_end (Milestone 3). */
+  const hasAccessUntilPeriodEnd = (): boolean => {
+    if (!subscription) return false
+    if (['active', 'trialing'].includes(subscription.status)) {
+      if (subscription.status === 'trialing' && subscription.trial_end) {
+        if (new Date() > new Date(subscription.trial_end)) return false
+      }
+      return true
+    }
+    // Allow access until current_period_end (e.g. canceled with cancel_at_period_end)
+    if (subscription.current_period_end) {
+      if (new Date() < new Date(subscription.current_period_end)) return true
+    }
+    return false
+  }
+
   // Check if user can access a specific feature
   const canAccess = (featureSlug: FeatureSlug): boolean => {
     if (!subscription) return false
-
-    // Check if subscription is active or trialing
-    if (!['active', 'trialing'].includes(subscription.status)) {
-      return false
-    }
-
-    // Check if trial has ended (for trialing subscriptions)
-    if (subscription.status === 'trialing' && subscription.trial_end) {
-      const trialEnd = new Date(subscription.trial_end)
-      if (new Date() > trialEnd) {
-        return false
-      }
-    }
-
-    // Check if feature is included in plan
+    if (!hasAccessUntilPeriodEnd()) return false
     return subscription.features.includes(featureSlug)
   }
 
   // Check if user has a specific plan active
   const isPlanActive = (planId: PlanId): boolean => {
     if (!subscription) return false
-    return subscription.plan_id === planId && ['active', 'trialing'].includes(subscription.status)
+    return subscription.plan_id === planId && hasAccessUntilPeriodEnd()
   }
 
   // Check if a feature is currently accessible

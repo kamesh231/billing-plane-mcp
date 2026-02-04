@@ -18,13 +18,20 @@ This plan adds: **billing schema** (all billing tables under `billing`), **new-u
 
 | **0. Catalog in Supabase** | Partially done | ~85% |
 
-| **1. Billing schema + new user + Stripe Customer** | Not started | 0% |
+| **1. Billing schema + new user + Stripe Customer** | Done | 100% |
 
 | **2. Catalog in Stripe + Checkout** | Done | 100% |
 
-| **3. Webhook sync + access until period end** | Partially done | ~55% |
+| **3. Webhook sync + access until period end** | Done | 100% |
 
-| **4. Proration docs + E2E** | Not started | 0% |
+| **4. Proration docs + E2E** | Done | 100% |
+
+---
+
+## Scope / Out of scope (current)
+
+- **Downgrade / plan change on payment failure:** We do not support downgrading or any plan-change logic when payment fails (e.g. automatic downgrade to free or a different plan). Payment failure is handled (e.g. `invoice.payment_failed` → `past_due`); plan changes in that scenario are out of scope for now.
+- **Usage-based metering and credits:** We do not support usage-based meter tracking or credits-based pricing at the moment. Billing is subscription/plan-based only.
 
 ---
 
@@ -52,6 +59,8 @@ This plan adds: **billing schema** (all billing tables under `billing`), **new-u
 ---
 
 ## Milestone 1: Billing schema + new user record + Stripe Customer
+
+**Status:** Done (100%).
 
 **Tangible outcome:** All billing tables live in schema `billing`. Every new user gets a subscription row (free) in Supabase and a Stripe Customer; free users can open Customer Portal for upgrade without going through Checkout first.
 
@@ -101,7 +110,7 @@ This plan adds: **billing schema** (all billing tables under `billing`), **new-u
 
 ## Milestone 2: Catalog in Stripe + Checkout (Phases 3 + 4 + 5)
 
-**Status:** Done.
+**Status:** Done (100%).
 
 **Tangible outcome:** Sync catalog to Stripe (Products, Prices, Option C column); create-checkout uses Supabase for trial when applicable; webhook resolves plan from billing catalog and writes subscription_items; all catalog and subscription reads/writes use `billing` schema.
 
@@ -127,21 +136,45 @@ This plan adds: **billing schema** (all billing tables under `billing`), **new-u
 
 ## Milestone 3: Webhook sync + access until period end (Phases 6 + 7 + 8)
 
-**Status:** Partially done (~55%).
+**Status:** Done (100%).
 
-**Tangible outcome:** Unchanged: webhook resolves price to product_id, writes subscription_items, grant-safe delete; app allows access until current_period_end. All subscription/subscription_items updates use `billing` schema.
+**Tangible outcome:** Webhook resolves price to product_id, writes subscription_items, grant-safe delete; app allows access until current_period_end. All subscription/subscription_items updates use `billing` schema.
 
 **Scope**
 
 - Webhook and SubscriptionProvider use `billing.subscriptions` and `billing.subscription_items` (and related catalog tables in `billing`).
 
+**Implemented**
+
+- **Access until current_period_end:** `SubscriptionProvider` grants access when status is `active` or `trialing`, or when `current_period_end` is in the future (e.g. canceled with cancel_at_period_end). Helper `hasAccessUntilPeriodEnd()` used by `canAccess` and `isPlanActive`.
+- **Grant-safe delete:** `stripe-webhook` `syncSubscriptionItems()` after upserting items from Stripe deletes any `billing.subscription_items` rows for that subscription whose `stripe_subscription_item_id` is not in the current Stripe subscription (so DB matches Stripe on plan change or item removal).
+
+**Verification**
+
+1. Cancel a paid subscription with “at period end” in Stripe; in app, user retains access until `current_period_end`, then loses it after webhook sets status to canceled and period has passed.
+2. Change plan (e.g. remove an add-on) in Portal; after webhook runs, `billing.subscription_items` contains only items still on the Stripe subscription (orphan rows removed).
+
 ---
 
 ## Milestone 4: Proration docs + E2E (Phases 9 + 10)
 
-**Status:** Not started.
+**Status:** Done (100%).
 
-**Tangible outcome:** Unchanged: proration documented; full E2E flow testable (catalog in billing, sync to Stripe, new user + Stripe Customer, upgrade via Portal or Checkout, webhook updates billing tables, access until period end).
+**Tangible outcome:** Proration documented; full E2E flow testable (catalog in billing, sync to Stripe, new user + Stripe Customer, upgrade via Portal or Checkout, webhook updates billing tables, access until period end).
+
+**Implemented**
+
+- **Proration:** Documented in [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#-proration-milestone-4): Stripe handles proration on upgrade/downgrade; app grants access until `current_period_end`.
+- **E2E verification:** Steps below.
+
+**Verification (E2E)**
+
+1. **Catalog in billing:** `billing.products`, `billing.prices`, `billing.entitlements`, `billing.product_entitlements` populated (e.g. via MCP `write_supabase_catalog` with schema `billing`).
+2. **Sync to Stripe:** Products/prices exist in Stripe and `stripe_price_id` / `stripe_product_id` in `billing.prices` / `billing.products` match.
+3. **New user + Stripe Customer:** Sign up; one row in `billing.subscriptions` (plan_id=free); after app load, `stripe_customer_id` is set (ensure-stripe-customer); in Stripe Dashboard, Customer exists.
+4. **Upgrade via Portal or Checkout:** Free user clicks Upgrade → Portal or Checkout; completes payment; webhook updates `billing.subscriptions` (plan_id, status, current_period_end) and `billing.subscription_items`; app shows upgraded plan and feature access.
+5. **Access until period end:** Cancel subscription at period end in Portal; app still grants access until `current_period_end`; after that time, access revoked (status=canceled, or period ended).
+6. **Downgrade / item removal:** In Portal change plan or remove item; webhook syncs; `billing.subscription_items` matches Stripe (grant-safe delete); app reflects new plan.
 
 ---
 

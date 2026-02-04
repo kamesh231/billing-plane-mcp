@@ -32,7 +32,7 @@ async function resolvePlanIdFromPrice(stripePriceId: string): Promise<string> {
   return name.toLowerCase()
 }
 
-/** Sync Stripe subscription items to billing.subscription_items (Milestone 2). */
+/** Sync Stripe subscription items to billing.subscription_items (Milestone 2). Grant-safe delete: remove items no longer in Stripe (Milestone 3). */
 async function syncSubscriptionItems(
   stripeSubscriptionId: string,
   userId: string,
@@ -44,6 +44,8 @@ async function syncSubscriptionItems(
     .eq('user_id', userId)
     .single()
   if (!subRow?.id) return
+
+  const stripeItemIds: string[] = []
 
   for (const item of items) {
     const stripePriceId = item.price.id
@@ -65,6 +67,22 @@ async function syncSubscriptionItems(
         },
         { onConflict: ['subscription_id', 'stripe_subscription_item_id'] }
       )
+    stripeItemIds.push(item.id)
+  }
+
+  // Grant-safe delete: remove rows for this subscription that are no longer in Stripe
+  if (stripeItemIds.length > 0) {
+    await billing
+      .from('subscription_items')
+      .delete()
+      .eq('subscription_id', subRow.id)
+      .not('stripe_subscription_item_id', 'in', stripeItemIds)
+  } else {
+    // No items in Stripe → delete all subscription_items for this subscription
+    await billing
+      .from('subscription_items')
+      .delete()
+      .eq('subscription_id', subRow.id)
   }
 }
 
