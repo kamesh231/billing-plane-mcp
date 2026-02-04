@@ -9,7 +9,7 @@
 -- 1. PRODUCTS (Stripe Product = what you sell)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.products (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   stripe_product_id TEXT UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_products_stripe_product_id ON public.products(str
 -- 2. PRICES (Stripe Price = how you charge for a product)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.prices (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   stripe_price_id TEXT UNIQUE NOT NULL,
   interval TEXT NOT NULL,
@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_product_entitlements_entitlement_slug ON public.p
 -- 5. SUBSCRIPTION_ITEMS (one row per Stripe subscription item; multi-price subscriptions)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.subscription_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   subscription_id UUID NOT NULL REFERENCES public.subscriptions(id) ON DELETE CASCADE,
   price_id UUID NOT NULL REFERENCES public.prices(id) ON DELETE CASCADE,
   stripe_subscription_item_id TEXT UNIQUE NOT NULL,

@@ -60,8 +60,7 @@ client_id = ""
 secret = ""
 redirect_uri = ""
 
-[edge_functions]
-enabled = true
+
 
 [analytics]
 enabled = false

@@ -22,7 +22,7 @@ GRANT USAGE ON SCHEMA billing TO service_role;
 
 CREATE TABLE IF NOT EXISTS billing.subscriptions (
   -- Primary key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Foreign key to Supabase auth
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -70,6 +70,7 @@ COMMENT ON COLUMN billing.subscriptions.status IS 'Subscription status: active, 
 COMMENT ON COLUMN billing.subscriptions.feature_limits IS 'JSON object with feature-specific limits';
 
 -- Reuse update_updated_at() from 001 (defined in public)
+DROP TRIGGER IF EXISTS set_updated_at_billing_subscriptions ON billing.subscriptions;
 CREATE TRIGGER set_updated_at_billing_subscriptions
   BEFORE UPDATE ON billing.subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -119,7 +120,7 @@ END$$;
 
 -- PRODUCTS
 CREATE TABLE IF NOT EXISTS billing.products (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   stripe_product_id TEXT UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
@@ -135,7 +136,7 @@ CREATE INDEX IF NOT EXISTS idx_billing_products_stripe_product_id ON billing.pro
 
 -- PRICES
 CREATE TABLE IF NOT EXISTS billing.prices (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID NOT NULL REFERENCES billing.products(id) ON DELETE CASCADE,
   stripe_price_id TEXT UNIQUE NOT NULL,
   interval TEXT NOT NULL,
@@ -188,7 +189,7 @@ CREATE INDEX IF NOT EXISTS idx_billing_product_entitlements_entitlement_slug ON 
 
 -- SUBSCRIPTION_ITEMS
 CREATE TABLE IF NOT EXISTS billing.subscription_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   subscription_id UUID NOT NULL REFERENCES billing.subscriptions(id) ON DELETE CASCADE,
   price_id UUID NOT NULL REFERENCES billing.prices(id) ON DELETE CASCADE,
   stripe_subscription_item_id TEXT UNIQUE NOT NULL,
@@ -206,22 +207,27 @@ CREATE INDEX IF NOT EXISTS idx_billing_subscription_items_price_id ON billing.su
 CREATE INDEX IF NOT EXISTS idx_billing_subscription_items_stripe_id ON billing.subscription_items(stripe_subscription_item_id);
 
 -- updated_at triggers for billing tables
+DROP TRIGGER IF EXISTS set_updated_at_billing_products ON billing.products;
 CREATE TRIGGER set_updated_at_billing_products
   BEFORE UPDATE ON billing.products
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at_billing_prices ON billing.prices;
 CREATE TRIGGER set_updated_at_billing_prices
   BEFORE UPDATE ON billing.prices
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at_billing_entitlements ON billing.entitlements;
 CREATE TRIGGER set_updated_at_billing_entitlements
   BEFORE UPDATE ON billing.entitlements
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at_billing_product_entitlements ON billing.product_entitlements;
 CREATE TRIGGER set_updated_at_billing_product_entitlements
   BEFORE UPDATE ON billing.product_entitlements
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at_billing_subscription_items ON billing.subscription_items;
 CREATE TRIGGER set_updated_at_billing_subscription_items
   BEFORE UPDATE ON billing.subscription_items
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();

@@ -4,7 +4,7 @@
 -- Create subscriptions table
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   -- Primary key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Foreign key to Supabase auth
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -77,6 +77,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger: Create subscription when user signs up
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW
